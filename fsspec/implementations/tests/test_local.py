@@ -76,6 +76,20 @@ def filetexts(d, open=open, mode="t"):
         os.chdir(odir)
 
 
+from fsspec.implementations.arrow import ArrowFSWrapper
+from pyarrow.fs import LocalFileSystem as PyArrowLocalFileSystem
+
+
+FILESYSTEMS = {"local": LocalFileSystem, "pyarrow": lambda: ArrowFSWrapper(PyArrowLocalFileSystem())}
+
+
+@pytest.fixture(params=["local", "pyarrow"])
+def fs(request):
+    cls = FILESYSTEMS[request.param]
+    return cls()
+
+
+
 def test_urlpath_inference_strips_protocol(tmpdir):
     tmpdir = make_path_posix(str(tmpdir))
     paths = ["/".join([tmpdir, "test.%02d.csv" % i]) for i in range(20)]
@@ -197,8 +211,7 @@ def test_not_found():
             pass
 
 
-def test_isfile():
-    fs = LocalFileSystem()
+def test_isfile(fs):
     with filetexts(files, mode="b"):
         for f in files.keys():
             assert fs.isfile(f)
@@ -207,8 +220,7 @@ def test_isfile():
         assert not fs.isfile("file://not-a-file")
 
 
-def test_isdir():
-    fs = LocalFileSystem()
+def test_isdir(fs):
     with filetexts(files, mode="b"):
         for f in files.keys():
             assert fs.isdir(os.path.dirname(os.path.abspath(f)))
@@ -338,9 +350,8 @@ def test_get_pyarrow_filesystem():
     assert not isinstance(UnknownFileSystem(), pa.filesystem.FileSystem)
 
 
-def test_directories(tmpdir):
+def test_directories(tmpdir, fs):
     tmpdir = make_path_posix(str(tmpdir))
-    fs = LocalFileSystem()
     fs.mkdir(tmpdir + "/dir")
     assert tmpdir + "/dir" in fs.ls(tmpdir)
     assert fs.ls(tmpdir, True)[0]["type"] == "directory"
@@ -348,9 +359,9 @@ def test_directories(tmpdir):
     assert not fs.ls(tmpdir)
 
 
-def test_file_ops(tmpdir):
+def test_file_ops(tmpdir, fs):
     tmpdir = make_path_posix(str(tmpdir))
-    fs = LocalFileSystem(auto_mkdir=True)
+    #fs = LocalFileSystem(auto_mkdir=True)
     with pytest.raises(FileNotFoundError):
         fs.info(tmpdir + "/nofile")
     fs.touch(tmpdir + "/afile")
@@ -525,28 +536,26 @@ def test_iterable(tmpdir):
     assert b"".join(out) == data
 
 
-def test_mv_empty(tmpdir):
-    localfs = fsspec.filesystem("file")
+def test_mv_empty(tmpdir, fs):
     src = os.path.join(str(tmpdir), "src")
     dest = os.path.join(str(tmpdir), "dest")
-    assert localfs.isdir(src) is False
-    localfs.mkdir(src)
-    assert localfs.isdir(src)
-    localfs.move(src, dest, recursive=True)
-    assert localfs.isdir(src) is False
-    assert localfs.isdir(dest)
-    assert localfs.info(dest)
+    assert fs.isdir(src) is False
+    fs.mkdir(src)
+    assert fs.isdir(src)
+    fs.move(src, dest, recursive=True)
+    assert fs.isdir(src) is False
+    assert fs.isdir(dest)
+    assert fs.info(dest)
 
 
-def test_mv_recursive(tmpdir):
-    localfs = fsspec.filesystem("file")
+def test_mv_recursive(tmpdir, fs):
     src = os.path.join(str(tmpdir), "src")
     dest = os.path.join(str(tmpdir), "dest")
-    assert localfs.isdir(src) is False
-    localfs.mkdir(src)
-    assert localfs.isdir(src)
-    localfs.touch(os.path.join(src, "afile"))
-    localfs.move(src, dest, recursive=True)
-    assert localfs.isdir(src) is False
-    assert localfs.isdir(dest)
-    assert localfs.info(os.path.join(dest, "afile"))
+    assert fs.isdir(src) is False
+    fs.mkdir(src)
+    assert fs.isdir(src)
+    fs.touch(os.path.join(src, "afile"))
+    fs.move(src, dest, recursive=True)
+    assert fs.isdir(src) is False
+    assert fs.isdir(dest)
+    assert fs.info(os.path.join(dest, "afile"))
