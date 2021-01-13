@@ -1290,6 +1290,7 @@ class AbstractBufferedFile(io.IOBase):
         whence: {0, 1, 2}
             from start of file, current location or end of file, resp.
         """
+        print("calling seek method!!!")
         loc = int(loc)
         if not self.mode == "rb":
             raise OSError(ESPIPE, "Seek only available in read mode")
